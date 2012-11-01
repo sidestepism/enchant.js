@@ -303,7 +303,7 @@ enchant.ENV = {
         }
     }()),
     /**
-     * Use Flash instead of native Audio class?
+     * Will Use Flash instead of native Audio class?
      * @type {String}
      */
     USE_FLASH_SOUND: (function() {
@@ -326,7 +326,12 @@ enchant.ENV = {
         39: 'right',
         40: 'down'
     },
-    PREVENT_DEFAULT_KEY_CODES: [37, 38, 39, 40, 32]
+    PREVENT_DEFAULT_KEY_CODES: [37, 38, 39, 40, 32],
+    /**
+     *
+      * @type {Boolean}
+     */
+    SOUND_ENABLED_IN_MOBILE_SAFARI: false
 };
 
 /**
@@ -2708,8 +2713,98 @@ enchant.Group = enchant.Class.create(enchant.Node, {
             propagationUp.call(this._touching, e, this.parentNode);
         },
         _touchendPropagation: function(e) {
+<<<<<<< HEAD
             propagationUp.call(this._touching, e, this.parentNode);
             this._touching = null;
+=======
+            if (this._touching != null) {
+                propagationUp.call(this._touching, e, this.parentNode);
+                this._touching = null;
+            }
+        },
+        /**
+         * rotation of group
+         * @see enchant.CanvasGroup.originX
+         * @see enchant.CanvasGroup.originY
+         * @type {Number}
+         */
+        rotation: {
+            get: function() {
+                return this._rotation;
+            },
+            set: function(rot) {
+                this._rotation = rot;
+                this._dirty = true;
+            }
+        },
+        /**
+         * scaling of group in the direction of x axis
+         * @see enchant.CanvasGroup.originX
+         * @see enchant.CanvasGroup.originY
+         * @type {Number}
+         */
+        scaleX: {
+            get: function() {
+                return this._scaleX;
+            },
+            set: function(scale) {
+                this._scaleX = scale;
+                this._dirty = true;
+            }
+        },
+        /**
+         * scaling of group in the direction of y axis
+         * @see enchant.CanvasGroup.originX
+         * @see enchant.CanvasGroup.originY
+         * @type {Number}
+         */
+        scaleY: {
+            get: function() {
+                return this._scaleY;
+            },
+            set: function(scale) {
+                this._scaleY = scale;
+                this._dirty = true;
+            }
+        },
+        addChild: function(node) {
+            this.childNodes.push(node);
+            node.parentNode = this;
+            node.dispatchEvent(new enchant.Event('added'));
+            if (this.scene) {
+                node.scene = this.scene;
+                var e = new enchant.Event('addedtoscene');
+                _onaddedtoscene.call(node, e, this._colorManager);
+            }
+        },
+        insertBefore: function(node, reference) {
+            var i = this.childNodes.indexOf(reference);
+            if (i !== -1) {
+                this.childNodes.splice(i, 0, node);
+                node.parentNode = this;
+                node.dispatchEvent(new enchant.Event('added'));
+                if (this.scene) {
+                    node.scene = this.scene;
+                    var e = new enchant.Event('addedtoscene');
+                    _onaddedtoscene.call(node, e, this._colorManager);
+                }
+            } else {
+                this.addChild(node);
+            }
+        },
+        removeChild: function(node) {
+            var i;
+            if ((i = this.childNodes.indexOf(node)) !== -1) {
+                this.childNodes.splice(i, 1);
+            }
+            node.parentNode = null;
+            node.dispatchEvent(new enchant.Event('removed'));
+            if (this.scene) {
+                node.scene = null;
+                var e = new enchant.Event('removedfromscene');
+                _onremovedfromscene.call(node, e, this._colorManager);
+            }
+>>>>>>> master
         }
     });
 
@@ -3381,5 +3476,3 @@ enchant.Sound.load = function(src, type) {
     }
     return sound;
 };
-
-enchant.Sound.enabledInMobileSafari = false;

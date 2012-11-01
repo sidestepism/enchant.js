@@ -15,12 +15,13 @@
         initialize: function() {
             var game = enchant.Game.instance;
             var that = this;
-
             enchant.Group.call(this);
+            this._dirty = false;
+            this._rotation = 0;
 
             this._cvsCache = {
                 matrix: [1, 0, 0, 1, 0, 0],
-                detectColor: '#000000'
+                detectColor: '#0000000'
             };
 
             this.width = game.width;
@@ -31,23 +32,16 @@
             this._element.height = game.height;
             this._element.style.position = 'absolute';
 
-            this._element.style[enchant.ENV.VENDOR_PREFIX + 'TransformOrigin'] = '0 0';
-            this._element.style[enchant.ENV.VENDOR_PREFIX + 'Transform'] = 'scale(' + enchant.Game.instance.scale + ')';
-
             this._detect = document.createElement('canvas');
             this._detect.width = game.width;
             this._detect.height = game.height;
             this._detect.style.position = 'absolute';
-            this._lastDetected = 0;
 
             this.context = this._element.getContext('2d');
             this._dctx = this._detect.getContext('2d');
 
             this._colorManager = new DetectColorManager(16, 256);
 
-            /**
-             * canvas タグに対して、DOM のイベントリスナを貼る
-             */
             if (enchant.ENV.TOUCH_ENABLED) {
                 this._element.addEventListener('touchstart', function(e) {
                     var touches = e.touches;
@@ -77,38 +71,38 @@
                     }
                 }, false);
             }
-                this._element.addEventListener('mousedown', function(e) {
-                    var x = e.pageX;
-                    var y = e.pageY;
-                    e = new enchant.Event('touchstart');
-                    e.identifier = game._mousedownID;
-                    e._initPosition(x, y);
-                    _touchstartFromDom.call(that, e);
-                    that._mousedown = true;
-                }, false);
-                game._element.addEventListener('mousemove', function(e) {
-                    if (!that._mousedown) {
-                        return;
-                    }
-                    var x = e.pageX;
-                    var y = e.pageY;
-                    e = new enchant.Event('touchmove');
-                    e.identifier = game._mousedownID;
-                    e._initPosition(x, y);
-                    _touchmoveFromDom.call(that, e);
-                }, false);
-                game._element.addEventListener('mouseup', function(e) {
-                    if (!that._mousedown) {
-                        return;
-                    }
-                    var x = e.pageX;
-                    var y = e.pageY;
-                    e = new enchant.Event('touchend');
-                    e.identifier = game._mousedownID;
-                    e._initPosition(x, y);
-                    _touchendFromDom.call(that, e);
-                    that._mousedown = false;
-                }, false);
+            this._element.addEventListener('mousedown', function(e) {
+                var x = e.pageX;
+                var y = e.pageY;
+                e = new enchant.Event('touchstart');
+                e.identifier = game._mousedownID;
+                e._initPosition(x, y);
+                _touchstartFromDom.call(that, e);
+                that._mousedown = true;
+            }, false);
+            game._element.addEventListener('mousemove', function(e) {
+                if (!that._mousedown) {
+                    return;
+                }
+                var x = e.pageX;
+                var y = e.pageY;
+                e = new enchant.Event('touchmove');
+                e.identifier = game._mousedownID;
+                e._initPosition(x, y);
+                _touchmoveFromDom.call(that, e);
+            }, false);
+            game._element.addEventListener('mouseup', function(e) {
+                if (!that._mousedown) {
+                    return;
+                }
+                var x = e.pageX;
+                var y = e.pageY;
+                e = new enchant.Event('touchend');
+                e.identifier = game._mousedownID;
+                e._initPosition(x, y);
+                _touchendFromDom.call(that, e);
+                that._mousedown = false;
+            }, false);
 
             var start = [
                 enchant.Event.ENTER,
@@ -134,50 +128,20 @@
                 });
             }, this);
 
-            var __onchildadded = function(e) {
-                var child = e.node;
-                if (child.childNodes) {
-                    child.addEventListener('childadded', __onchildadded);
-                    child.addEventListener('childremoved', __onchildremoved);
-                }
-                attachCache.call(child, that._colorManager);
-                rendering.call(child, that.context);
-            };
-
-            var __onchildremoved = function(e) {
-                var child = e.node;
-                if (child.childNodes) {
-                    child.removeEventListener('childadded', __onchildadded);
-                    child.removeEventListener('childremoved', __onchildremoved);
-                }
-                detachCache.call(child, that._colorManager);
-            };
-
-            this.addEventListener('childremoved', __onchildremoved);
-            this.addEventListener('childadded', __onchildadded);
-
             this._onexitframe = function() {
                 var ctx = that.context;
                 ctx.clearRect(0, 0, game.width, game.height);
+                checkCache.call(that, that._colorManager);
                 rendering.call(that, ctx);
             };
         },
-        /**
-         * レンダリング用のイベントリスナを Game オブジェクトに登録
-         * @private
-         */
         _startRendering: function() {
             var game = enchant.Game.instance;
             if (!game._listeners['exitframe']) {
                 game._listeners['exitframe'] = [];
             }
             game._listeners['exitframe'].push(this._onexitframe);
-
         },
-        /**
-         * _startRendering で登録したレンダリング用のイベントリスナを削除
-         * @private
-         */
         _stopRendering: function() {
             var game = enchant.Game.instance;
             game.removeEventListener('exitframe', this._onexitframe);
@@ -185,36 +149,120 @@
         _getEntityByPosition: function(x, y) {
             var ctx = this._dctx;
             ctx.clearRect(0, 0, this.width, this.height);
-            if (this._lastDetected < this.age) {
-                detectrendering.call(this, ctx);
-                this._lastDetected = this.age;
-            }
+            detectrendering.call(this, ctx);
             var color = ctx.getImageData(x, y, 1, 1).data;
             return this._colorManager.getSpriteByColor(color);
         },
         _touchstartPropagation: function(e) {
-            this._touching = this._getEntityByPosition(e.x, e.y);
-            if (this._touching) {
+            var sp = this._getEntityByPosition(e.x, e.y);
+            if (sp) {
+                this._touching = sp;
                 propagationUp.call(this._touching, e, this.parentNode);
             } else {
-                this._touching = enchant.Game.instance.currentScene;
-                this._touching.dispatchEvent(e);
+                sp = null;
             }
-            return this._touching;
+            return sp;
         },
         _touchmovePropagation: function(e) {
-            propagationUp.call(this._touching, e, this.parentNode);
+            if (this._touching != null) {
+                propagationUp.call(this._touching, e, this.parentNode);
+            }
         },
         _touchendPropagation: function(e) {
-            propagationUp.call(this._touching, e, this.parentNode);
-            this._touching = null;
+            if (this._touching != null) {
+                propagationUp.call(this._touching, e, this.parentNode);
+                this._touching = null;
+            }
+        },
+        /**
+         * rotation of group
+         * @see enchant.CanvasGroup.originX
+         * @see enchant.CanvasGroup.originY
+         * @type {Number}
+         */
+        rotation: {
+            get: function() {
+                return this._rotation;
+            },
+            set: function(rot) {
+                this._rotation = rot;
+                this._dirty = true;
+            }
+        },
+        /**
+         * scaling of group in the direction of x axis
+         * @see enchant.CanvasGroup.originX
+         * @see enchant.CanvasGroup.originY
+         * @type {Number}
+         */
+        scaleX: {
+            get: function() {
+                return this._scaleX;
+            },
+            set: function(scale) {
+                this._scaleX = scale;
+                this._dirty = true;
+            }
+        },
+        /**
+         * scaling of group in the direction of y axis
+         * @see enchant.CanvasGroup.originX
+         * @see enchant.CanvasGroup.originY
+         * @type {Number}
+         */
+        scaleY: {
+            get: function() {
+                return this._scaleY;
+            },
+            set: function(scale) {
+                this._scaleY = scale;
+                this._dirty = true;
+            }
+        },
+        addChild: function(node) {
+            this.childNodes.push(node);
+            node.parentNode = this;
+            node.dispatchEvent(new enchant.Event('added'));
+            if (this.scene) {
+                node.scene = this.scene;
+                var e = new enchant.Event('addedtoscene');
+                _onaddedtoscene.call(node, e, this._colorManager);
+            }
+        },
+        insertBefore: function(node, reference) {
+            var i = this.childNodes.indexOf(reference);
+            if (i !== -1) {
+                this.childNodes.splice(i, 0, node);
+                node.parentNode = this;
+                node.dispatchEvent(new enchant.Event('added'));
+                if (this.scene) {
+                    node.scene = this.scene;
+                    var e = new enchant.Event('addedtoscene');
+                    _onaddedtoscene.call(node, e, this._colorManager);
+                }
+            } else {
+                this.addChild(node);
+            }
+        },
+        removeChild: function(node) {
+            var i;
+            if ((i = this.childNodes.indexOf(node)) !== -1) {
+                this.childNodes.splice(i, 1);
+            }
+            node.parentNode = null;
+            node.dispatchEvent(new enchant.Event('removed'));
+            if (this.scene) {
+                node.scene = null;
+                var e = new enchant.Event('removedfromscene');
+                _onremovedfromscene.call(node, e, this._colorManager);
+            }
         }
     });
 
+    var RENDER_OFFSET = 0;
     var canvasGroupInstances = [];
     var touchingEntity = null;
     var touchingGroup = null;
-
     var _touchstartFromDom = function(e) {
         var game = enchant.Game.instance;
         var group;
@@ -231,7 +279,6 @@
             }
         }
     };
-
     var _touchmoveFromDom = function(e) {
         if (touchingGroup != null) {
             touchingGroup._touchmovePropagation(e);
@@ -242,6 +289,41 @@
             touchingGroup._touchendPropagation(e);
             touchingEntity = null;
             touchingGroup = null;
+        }
+    };
+
+    enchant.Map.prototype.cvsRender = function(ctx) {
+        var game = enchant.Game.instance;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        var cvs = this._element.firstChild;
+        ctx.drawImage(cvs, 0, 0, game.width, game.height);
+        ctx.restore();
+    };
+
+    enchant.Sprite.prototype.cvsRender = function(ctx) {
+        var img, imgdata, row, frame;
+        var sx, sy, sw, sh;
+        if (this._image) {
+            frame = Math.abs(this._frame) || 0;
+            img = this._image;
+            imgdata = img._element;
+            row = img.width / this._width | 0;
+            sx = (frame % row | 0) * this._width;
+            sy = (frame / row | 0) * this._height % img.height;
+            sy = Math.min(sy, img.height - this._height);
+            sw = Math.min(img.width - sx, this._width);
+            sh = Math.min(img.height - sy, this._height);
+            ctx.drawImage(imgdata, sx, sy, sw, sh, RENDER_OFFSET, RENDER_OFFSET, this._width + RENDER_OFFSET, this._height + RENDER_OFFSET);
+        }
+    };
+
+    enchant.Label.prototype.cvsRender = function(ctx) {
+        if (this.text) {
+            ctx.textBaseline = 'top';
+            ctx.font = this.font;
+            ctx.fillStyle = this.color || '#000000';
+            ctx.fillText(this.text, RENDER_OFFSET, RENDER_OFFSET, this.width + RENDER_OFFSET);
         }
     };
 
@@ -304,28 +386,44 @@
     };
 
     var makeTransformMatrix = function(node, dest) {
-        var x = node._x;
-        var y = node._y;
-        var width = node._width || 0;
-        var height = node._height || 0;
-        var rotation = node._rotation || 0;
-        var scaleX = (typeof node._scaleX === 'number') ? node._scaleX : 1;
-        var scaleY = (typeof node._scaleY === 'number') ? node._scaleY : 1;
-        var theta = rotation * Math.PI / 180;
+        var x = node.x;
+        var y = node.y;
+        var width = node.width || 0;
+        var height = node.height || 0;
+        var rotation = node.rotation || 0;
+        var scaleX = (typeof node.scaleX === 'number') ? node.scaleX : 1;
+        var scaleY = (typeof node.scaleY === 'number') ? node.scaleY : 1;
+        var theta = Math.PI * rotation / 180;
         var tmpcos = Math.cos(theta);
         var tmpsin = Math.sin(theta);
-        var w = (typeof node._originX === 'number') ? node._originX : width / 2;
-        var h = (typeof node._originY === 'number') ? node._originY : height / 2;
+        var w = (typeof node.originX === 'number') ? node.originX : width / 2;
+        var h = (typeof node.originY === 'number') ? node.originY : height / 2;
         var a = scaleX * tmpcos;
         var b = scaleX * tmpsin;
         var c = scaleY * tmpsin;
         var d = scaleY * tmpcos;
-        dest[0] = a;
-        dest[1] = b;
-        dest[2] = -c;
-        dest[3] = d;
+        dest[0] = scaleX * tmpcos;
+        dest[1] = scaleX * tmpsin;
+        dest[2] = -scaleY * tmpsin;
+        dest[3] = scaleY * tmpcos;
         dest[4] = (-a * w + c * h + x + w);
         dest[5] = (-b * w - d * h + y + h);
+    };
+
+    var dirtyCheck = function(node) {
+        if (node.__dirty ||
+            node._cvsCache.x !== node.x ||
+            node._cvsCache.y !== node.y ||
+            node._cvsCache.width !== node.width ||
+            node._cvsCache.height !== node.height
+            ) {
+            makeTransformMatrix(node, node._cvsCache.matrix);
+            node.__dirty = false;
+            node._cvsCache.x = node.x;
+            node._cvsCache.y = node.y;
+            node._cvsCache.width = node.width;
+            node._cvsCache.height = node.height;
+        }
     };
 
     var alpha = function(ctx, node) {
@@ -337,49 +435,9 @@
         ctx.globalAlpha = (typeof node.opacity === 'number') ? node.opacity : 1.0;
     };
 
-    var _multiply = function(m1, m2, dest) {
-        var a11 = m1[0], a21 = m1[2], adx = m1[4],
-            a12 = m1[1], a22 = m1[3], ady = m1[5];
-        var b11 = m2[0], b21 = m2[2], bdx = m2[4],
-            b12 = m2[1], b22 = m2[3], bdy = m2[5];
-
-        dest[0] = a11 * b11 + a21 * b12;
-        dest[1] = a12 * b11 + a22 * b12;
-        dest[2] = a11 * b21 + a21 * b22;
-        dest[3] = a12 * b21 + a22 * b22;
-        dest[4] = a11 * bdx + a21 * bdy + adx;
-        dest[5] = a12 * bdx + a22 * bdy + ady;
-    };
-
-    var _multiplyVec = function(mat, vec, dest) {
-        var x = vec[0], y = vec[1];
-        var m11 = mat[0], m21 = mat[2], mdx = mat[4],
-            m12 = mat[1], m22 = mat[3], mdy = mat[5];
-        dest[0] = m11 * x + m21 * y + mdx;
-        dest[1] = m12 * x + m22 * y + mdy;
-    };
-
-    var _stuck = [ [ 1, 0, 0, 1, 0, 0 ] ];
-    var _transform = function(mat) {
-        var newmat = [];
-        _multiply(_stuck[_stuck.length - 1], mat, newmat);
-        _stuck.push(newmat);
-    };
-
     var transform = function(ctx, node) {
-        if (node._dirty) {
-            makeTransformMatrix(node, node._cvsCache.matrix);
-        }
-        _transform(node._cvsCache.matrix);
-        var mat = _stuck[_stuck.length - 1];
-        ctx.setTransform.apply(ctx, mat);
-        var ox = (typeof node._originX === 'number') ? node._originX : node._width / 2 || 0;
-        var oy = (typeof node._originY === 'number') ? node._originY : node._height / 2 || 0;
-        var vec = [ ox, oy ];
-        _multiplyVec(mat, vec, vec);
-        node._offsetX = vec[0] - ox;
-        node._offsetY = vec[1] - oy;
-        node._dirty = false;
+        dirtyCheck(node);
+        ctx.transform.apply(ctx, node._cvsCache.matrix);
     };
 
     var render = function(ctx, node) {
@@ -389,7 +447,7 @@
         }
         if (node.backgroundColor) {
             ctx.fillStyle = node.backgroundColor;
-            ctx.fillRect(0, 0, node.width, node.height);
+            ctx.fillRect(RENDER_OFFSET, RENDER_OFFSET, node.width + RENDER_OFFSET, node.height + RENDER_OFFSET);
         }
 
         if (node.cvsRender) {
@@ -402,7 +460,7 @@
             } else {
                 ctx.strokeStyle = '#0000ff';
             }
-            ctx.strokeRect(0, 0, node.width, node.height);
+            ctx.strokeRect(RENDER_OFFSET, RENDER_OFFSET, node.width + RENDER_OFFSET, node.height + RENDER_OFFSET);
         }
     };
 
@@ -415,7 +473,6 @@
         },
         function(ctx) {
             ctx.restore();
-            _stuck.pop();
         }
     );
 
@@ -438,31 +495,66 @@
         },
         function(ctx) {
             ctx.restore();
-            _stuck.pop();
         }
     );
 
-    var attachCache = nodesWalker(
+    var is__dirty = function() {
+        if (this._dirty) {
+            this.__dirty = true;
+        } else {
+            this.__dirty = false;
+        }
+    };
+
+    var attachCache = function(colorManager) {
+        if (this._cvsCache) {
+            return;
+        }
+        this.addEventListener('render', is__dirty);
+        this._cvsCache = {};
+        this._cvsCache.matrix = [];
+        this._cvsCache.detectColor = array2hexrgb(colorManager.attachDetectColor(this));
+    };
+
+    var detachCache = function(colorManager) {
+        if (!this._cvsCache) {
+            return;
+        }
+        this.removeEventListener('render', is__dirty);
+        colorManager.detachDetectColor(this);
+        delete this._cvsCache;
+    };
+
+    var checkCache = nodesWalker(
         function(colorManager) {
-            if (!this._cvsCache) {
-                this._cvsCache = {};
-                this._cvsCache.matrix = [ 1, 0, 0, 1, 0, 0 ];
-                this._cvsCache.detectColor = array2hexrgb(colorManager.attachDetectColor(this));
-            }
+            attachCache.call(this, colorManager);
         }
     );
 
-    var detachCache = nodesWalker(
-        function(colorManager) {
+    var _onaddedtoscene = nodesWalker(
+        function(e, colorManager) {
+            this.dispatchEvent(e);
+            attachCache.call(this, colorManager);
+        }
+    );
+
+    var _onremovedfromscene = nodesWalker(
+        function(e, colorManager) {
+            this.dispatchEvent(e);
             detachCache.call(this, colorManager);
-            if (this._cvsCache) {
-                colorManager.detachDetectColor(this);
-                delete this._cvsCache;
-            }
+        }
+    );
+
+    var propagationDown = nodesWalker(
+        function(e) {
+            this.dispatchEvent(e);
         }
     );
 
     var propagationUp = function(e, end) {
         this.dispatchEvent(e);
+        if (this.parentNode && this.parentNode !== end) {
+            propagationUp.call(this.parentNode, e, end);
+        }
     };
 }());

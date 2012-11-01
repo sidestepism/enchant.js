@@ -54,13 +54,12 @@ enchant.ENV = {
         }
     }()),
     /**
-     * Use Flash instead of native Audio class?
+     * Will Use Flash instead of native Audio class?
      * @type {String}
      */
     USE_FLASH_SOUND: (function() {
         var ua = navigator.userAgent;
         var vendor = navigator.vendor || "";
-        // ローカルではなく、モバイル端末向けでもなく、Safariでもない場合 (デフォルト)
         return (location.href.indexOf('http') === 0 && ua.indexOf('Mobile') === -1 && vendor.indexOf('Apple') !== -1);
     }()),
     /**
@@ -77,5 +76,10 @@ enchant.ENV = {
         39: 'right',
         40: 'down'
     },
-    PREVENT_DEFAULT_KEY_CODES: [37, 38, 39, 40, 32]
+    PREVENT_DEFAULT_KEY_CODES: [37, 38, 39, 40, 32],
+    /**
+     *
+      * @type {Boolean}
+     */
+    SOUND_ENABLED_IN_MOBILE_SAFARI: false
 };
