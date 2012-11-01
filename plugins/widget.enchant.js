@@ -11,7 +11,6 @@
  */
 
 (function() {
-
     /**
      * @type {Object}
      */
