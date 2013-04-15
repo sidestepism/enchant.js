@@ -5,6 +5,8 @@ enchant.js
 
 JavaScript Game Engine
 
+Join [enchant.js User Group](https://groups.google.com/forum/?fromgroups#!forum/enchantjs-user-group)! (English & Japanese)
+
 Download
 --------
 
